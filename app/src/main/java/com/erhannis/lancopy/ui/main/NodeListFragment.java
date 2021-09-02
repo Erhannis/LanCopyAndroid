@@ -97,7 +97,7 @@ public class NodeListFragment extends LCFragment {
         super.onServiceConnected(className, service);
         lcs.nodeLinesChanged.subscribeWithGet(o -> {
             MyApplication.runOnUiThread(() -> {
-                this.nodeListAdapter.setList(lcs.nodeLines);
+                this.nodeListAdapter.setList(new ArrayList<>(lcs.nodeLines));
             });
         });
     }

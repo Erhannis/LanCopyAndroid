@@ -1,17 +1,24 @@
 package com.erhannis.lancopy;
 
 import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
 import android.os.Binder;
+import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.util.Log;
 import android.widget.Toast;
+
+import androidx.annotation.RequiresApi;
+import androidx.core.app.NotificationCompat;
 
 import com.erhannis.lancopy.refactor.Advertisement;
 import com.erhannis.lancopy.refactor.Comm;
@@ -211,7 +218,17 @@ public class LanCopyService extends Service {
      * Show a notification while this service is running.
      */
     // https://android.googlesource.com/platform/development/+/master/samples/ApiDemos/src/com/example/android/apis/app/StatusBarNotifications.java
+    // https://stackoverflow.com/a/47533338/513038
     private void showNotification() {
+        String channelId;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            channelId = createNotificationChannel("lancopy_net_service", "LanCopy Communication Service");
+        } else {
+            // If earlier version channel ID is not used
+            // https://developer.android.com/reference/android/support/v4/app/NotificationCompat.Builder.html#NotificationCompat.Builder(android.content.Context)
+            channelId = "";
+        }
+
         // In this sample, we'll use the same text for the ticker and the expanded notification
         CharSequence text = getText(R.string.local_service_started);
 
@@ -222,16 +239,28 @@ public class LanCopyService extends Service {
         mBinder.uii.dataOwner.errOnce("//TODO Set swipe-down action on notification");
 
         // Set the info for the views that show in the notification panel.
-        Notification notification = new Notification.Builder(this)
+        Notification notification = new NotificationCompat.Builder(this, channelId)
+                .setOngoing(true)
                 .setSmallIcon(android.R.drawable.stat_sys_upload_done)  //TODO set
                 .setTicker(text)  // the status text
                 .setWhen(System.currentTimeMillis())  // the time stamp
                 .setContentTitle("LanCopy")  // the label of the entry
                 .setContentText(text)  // the contents of the entry
                 .setContentIntent(contentIntent)  // The intent to send when the entry is clicked
+                .setCategory(Notification.CATEGORY_SERVICE)
                 .build();
 
         // Send the notification.
         startForeground(R.string.local_service_started, notification);
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private String createNotificationChannel(String channelId, String channelName) {
+        NotificationChannel chan = new NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_NONE);
+        //chan.setLightColor(Color.BLUE);
+        //chan.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
+        NotificationManager service = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        service.createNotificationChannel(chan);
+        return channelId;
     }
 }

@@ -13,6 +13,7 @@ import android.os.Build;
 import android.os.Bundle;
 
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.documentfile.provider.DocumentFile;
 import androidx.fragment.app.Fragment;
 
@@ -20,6 +21,7 @@ import android.os.Environment;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
+import android.text.InputType;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -29,6 +31,7 @@ import android.widget.Toast;
 
 import com.erhannis.lancopy.ContentData;
 import com.erhannis.lancopy.LanCopyService;
+import com.erhannis.lancopy.MyApplication;
 import com.erhannis.lancopy.R;
 import com.erhannis.lancopy.data.BinaryData;
 import com.erhannis.lancopy.data.Data;
@@ -43,6 +46,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 
 import static android.app.Activity.RESULT_OK;
+import static com.erhannis.mathnstuff.MeUtils.orNull;
 
 /**
  * A simple {@link Fragment} subclass.
@@ -103,7 +107,7 @@ public class PostingFragment extends LCFragment {
         View view = inflater.inflate(R.layout.fragment_posting, container, false);
         view.findViewById(R.id.btnPostClipboard).setOnClickListener(v -> {
             ClipData cd = clipboard.getPrimaryClip();
-            if (cd.getItemCount() > 0) {
+            if (cd != null && cd.getItemCount() > 0) {
                 if (cd.getItemCount() > 1) {
                     toast("Too many clipboard items: " + cd.getItemCount());
                 }
@@ -122,6 +126,34 @@ public class PostingFragment extends LCFragment {
             } else {
                 setData(new NoData());
             }
+        });
+        view.findViewById(R.id.btnPostFiles).setOnLongClickListener(v -> {
+            // https://stackoverflow.com/a/10904665/513038
+            AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
+            builder.setTitle("Title");
+
+            final EditText input = new EditText(getActivity());
+            input.setText(orNull(MyApplication::getApkName));
+            input.setInputType(InputType.TYPE_CLASS_TEXT);
+            builder.setView(input);
+
+            builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    String path = input.getText().toString();
+                    setData(new FilesData(new File[]{new File(path)}));
+                }
+            });
+            builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    dialog.cancel();
+                }
+            });
+
+            builder.show();
+
+            return true;
         });
         view.findViewById(R.id.btnPostFiles).setOnClickListener(v -> {
             Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
