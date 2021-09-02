@@ -1,0 +1,2 @@
+rootProject.name = "LanCopy"
+include ':app'

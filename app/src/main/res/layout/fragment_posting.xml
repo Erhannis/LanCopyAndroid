@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".ui.main.PostingFragment">
+
+    <Button
+        android:id="@+id/btnPostClipboard"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Post clipboard"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <Button
+        android:id="@+id/btnPostFiles"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Post files..."
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/btnPostClipboard" />
+
+    <Button
+        android:id="@+id/btnPostFolder"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Post folder..."
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/btnPostFiles" />
+
+    <EditText
+        android:id="@+id/etPosted"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:ems="10"
+        android:gravity="start|top"
+        android:hint="(Nothing currently posted)"
+        android:inputType="textMultiLine|none"
+        app:layout_constraintBottom_toBottomOf="@+id/btnPostFolder"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@+id/btnPostClipboard"
+        app:layout_constraintTop_toTopOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
