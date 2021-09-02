@@ -2,6 +2,8 @@ package com.erhannis.lancopy;
 
 import android.content.Context;
 import android.content.Intent;
+import android.os.Handler;
+import android.os.Looper;
 
 import androidx.multidex.MultiDexApplication;
 
@@ -17,5 +19,11 @@ public class MyApplication extends MultiDexApplication {
 
     public static Context getContext() {
         return CONTEXT;
+    }
+
+    public static void runOnUiThread(final Runnable r) {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            r.run();
+        });
     }
 }

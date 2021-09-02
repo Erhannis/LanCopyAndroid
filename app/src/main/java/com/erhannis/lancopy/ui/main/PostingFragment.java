@@ -28,6 +28,7 @@ import android.widget.EditText;
 import android.widget.Toast;
 
 import com.erhannis.lancopy.ContentData;
+import com.erhannis.lancopy.LanCopyService;
 import com.erhannis.lancopy.R;
 import com.erhannis.lancopy.data.BinaryData;
 import com.erhannis.lancopy.data.Data;

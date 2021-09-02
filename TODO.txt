@@ -1,2 +1,7 @@
 ContentData support directories
 ContentData deserialize
+Accept data Intents
+Update CommsFrames
+Tap on NodeList
+Request permissions
+Fragment setRetained?

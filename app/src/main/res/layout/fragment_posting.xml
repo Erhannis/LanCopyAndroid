@@ -38,6 +38,7 @@
         android:gravity="start|top"
         android:hint="(Nothing currently posted)"
         android:inputType="textMultiLine|none"
+        android:focusable="false"
         app:layout_constraintBottom_toBottomOf="@+id/btnPostFolder"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@+id/btnPostClipboard"
