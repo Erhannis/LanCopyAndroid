@@ -1,5 +1,6 @@
 package com.erhannis.lancopy;
 
+import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.OpenableColumns;
@@ -23,6 +24,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.SequenceInputStream;
 import java.nio.charset.Charset;
 import java.text.SimpleDateFormat;
@@ -30,6 +32,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.Objects;
+import java.util.function.Function;
 
 public class ContentData extends Data {
     private static final String TAG = "ContentData";
@@ -75,6 +78,23 @@ public class ContentData extends Data {
         return "[content] {" + MeUtils.join(", ", uris) + "}";
     }
 
+    public String toLongString() {
+        String[] subtexts = new String[this.uris.length + 1];
+        subtexts[0] = "[content]";
+        if (this.uris.length > 0) {
+            try {
+                subtexts[0] = "[content]\n" + this.uris[0] + "\n----";
+            } catch (Throwable var3) {
+            }
+        }
+
+        for(int i = 0; i < this.uris.length; ++i) {
+            subtexts[i + 1] = this.uris[i] + " (" + getSize(this.uris[i], -1) + ")";
+        }
+
+        return MeUtils.join("\n", subtexts);
+    }
+
     private static class PathedUri {
         public final String path;
         public final Uri uri;
@@ -89,12 +109,22 @@ public class ContentData extends Data {
         try {
             Cursor returnCursor = MyApplication.getContext().getContentResolver().query(uri, null, null, null, null);
             int nameIndex = returnCursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
-            //int sizeIndex = returnCursor.getColumnIndex(OpenableColumns.SIZE);
             returnCursor.moveToFirst();
-            //String size = Long.toString(returnCursor.getLong(sizeIndex));
             return returnCursor.getString(nameIndex);
         } catch (Throwable t) {
             Log.e(TAG, "Error getting filename", t);
+            return def;
+        }
+    }
+
+    private static long getSize(Uri uri, long def) {
+        try {
+            Cursor returnCursor = MyApplication.getContext().getContentResolver().query(uri, null, null, null, null);
+            int sizeIndex = returnCursor.getColumnIndex(OpenableColumns.SIZE);
+            returnCursor.moveToFirst();
+            return returnCursor.getLong(sizeIndex);
+        } catch (Throwable t) {
+            Log.e(TAG, "Error getting file size", t);
             return def;
         }
     }
@@ -187,7 +217,39 @@ public class ContentData extends Data {
         });
     }
 
-    public static Data deserialize(InputStream stream) {
-        return new BinaryData(stream); //TODO Kinda weird, returning a different kind of data
+    public static Data deserialize(InputStream stream, Context ctx, Function<String, Uri> filePicker) {
+        System.out.println("--> ContentData deserialize");
+        try {
+            int fileCount = Ints.fromByteArray(MeUtils.readNBytes(stream, 4));
+            Uri[] files = new Uri[fileCount];
+            for (int i = 0; i < fileCount; i++) {
+                int filenameLen = Ints.fromByteArray(MeUtils.readNBytes(stream, 4));
+                String filename = new String(MeUtils.readNBytes(stream, filenameLen), UTF8);
+
+                Uri uri = filePicker.apply(filename);
+                if (uri == null) {
+                    throw new RuntimeException("File save canceled");
+                }
+
+                //TODO Wait until all files named?
+                //TODO Uh...this copies the entire remaining stream.  Incompatible with "multiple files".
+
+                OutputStream output = ctx.getContentResolver().openOutputStream(uri);
+
+                MeUtils.pipeInputStreamToOutputStream(stream, output);
+                stream.close();
+                output.flush();
+                output.close();
+
+                files[i] = uri;
+            }
+            System.out.println("Done deserializing files");
+            System.out.println("<-- ContentData deserialize");
+            return new ContentData(files);
+        } catch (Throwable t) {
+            Log.e(TAG, "Error deserializing to ContentData", t);
+            System.out.println("<-- ContentData deserialize");
+            return new ErrorData("Error deserializing files: " + t);
+        }
     }
 }

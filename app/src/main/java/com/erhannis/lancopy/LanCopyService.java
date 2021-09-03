@@ -12,6 +12,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Handler;
@@ -31,6 +32,7 @@ import com.erhannis.lancopy.refactor.Summary;
 import com.erhannis.lancopy.ui.main.NodeLine;
 import com.erhannis.mathnstuff.MeUtils;
 import com.erhannis.mathnstuff.Pair;
+import com.erhannis.mathnstuff.utils.NumberedConcurrentHashMap;
 import com.erhannis.mathnstuff.utils.Observable;
 
 import java.util.ArrayList;
@@ -43,6 +45,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import jcsp.lang.Alternative;
+import jcsp.lang.ChannelOutput;
 import jcsp.lang.Guard;
 import jcsp.lang.ProcessManager;
 
@@ -55,6 +58,7 @@ public class LanCopyService extends Service {
         //TODO Make better
         public final Observable<Object> nodeLinesChanged = new Observable<Object>(true);
         public final Observable<String> loadedText = new Observable<String>(false); //TODO Use
+        public final NumberedConcurrentHashMap<ChannelOutput<Uri>> fileSaveResults = new NumberedConcurrentHashMap<>();
 
         public LocalBinder(LanCopyNet.UiInterface uii) {
             this.uii = uii;

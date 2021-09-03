@@ -1,5 +1,6 @@
 package com.erhannis.lancopy;
 
+import android.app.Activity;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.app.Service;
@@ -7,14 +8,25 @@ import android.app.job.JobInfo;
 import android.app.job.JobScheduler;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.InputType;
+import android.widget.EditText;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.multidex.MultiDexApplication;
+
+import com.erhannis.lancopy.data.FilesData;
+
+import java.io.File;
+import java.util.function.Consumer;
+
+import static com.erhannis.mathnstuff.MeUtils.orNull;
 
 public class MyApplication extends MultiDexApplication {
     private static Context CONTEXT = null;
@@ -63,5 +75,32 @@ public class MyApplication extends MultiDexApplication {
         ApplicationInfo ai = pm.getApplicationInfo(packageName, 0);
         String apk = ai.publicSourceDir;
         return apk;
+    }
+
+    public static void inputDialog(Activity act, String title, String def, Consumer<String> yesHandler, Runnable cancelHandler) {
+        // https://stackoverflow.com/a/10904665/513038
+        AlertDialog.Builder builder = new AlertDialog.Builder(act);
+        builder.setTitle(title);
+
+        final EditText input = new EditText(act);
+        input.setText(def);
+        input.setInputType(InputType.TYPE_CLASS_TEXT);
+        builder.setView(input);
+
+        builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                yesHandler.accept(input.getText().toString());
+            }
+        });
+        builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.cancel();
+                cancelHandler.run();
+            }
+        });
+
+        builder.show();
     }
 }

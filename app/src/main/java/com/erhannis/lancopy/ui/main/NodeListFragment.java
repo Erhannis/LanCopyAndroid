@@ -1,15 +1,22 @@
 package com.erhannis.lancopy.ui.main;
 
+import android.app.Activity;
 import android.app.ProgressDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 
+import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 import androidx.databinding.DataBindingUtil;
 import androidx.fragment.app.Fragment;
 
+import android.os.Environment;
 import android.os.IBinder;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -17,6 +24,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ListView;
 
+import com.erhannis.lancopy.ContentData;
+import com.erhannis.lancopy.LanCopyService;
 import com.erhannis.lancopy.MyApplication;
 import com.erhannis.lancopy.R;
 import com.erhannis.lancopy.data.BinaryData;
@@ -27,13 +36,26 @@ import com.erhannis.lancopy.data.NoData;
 import com.erhannis.lancopy.data.TextData;
 import com.erhannis.lancopy.databinding.FragmentNodeListBinding;
 import com.erhannis.lancopy.refactor.Summary;
+import com.erhannis.mathnstuff.MeMath;
+import com.erhannis.mathnstuff.MeUtils;
 import com.erhannis.mathnstuff.Pair;
+
+import org.apache.commons.io.FileUtils;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
+
+import jcsp.helpers.JcspUtils;
+import jcsp.lang.AltingChannelInput;
+import jcsp.lang.Any2OneChannel;
+import jcsp.lang.Channel;
+import jcsp.lang.ChannelOutput;
+
+import static com.erhannis.mathnstuff.MeUtils.orNull;
 
 /**
  * A simple {@link Fragment} subclass.
@@ -123,11 +145,12 @@ public class NodeListFragment extends LCFragment {
             ProgressDialog pd = new ProgressDialog(getActivity());
             pd.setProgressStyle(ProgressDialog.STYLE_SPINNER);
             pd.setTitle("Pulling data...");
+            pd.setCancelable(false);
+            pd.setCanceledOnTouchOutside(false);
             pd.show();
 
             new Thread(() -> { // Android didn't like me doing networking on main thread
                 try {
-                    //TODO This is not airtight; drag-n-drop still works, for instance
                     Pair<String, InputStream> result = lcs.uii.dataCall.call(lcs.uii.adCall.call(nl.summary.id).comms);
                     Data data;
                     if (result == null) {
@@ -141,17 +164,20 @@ public class NodeListFragment extends LCFragment {
                                 data = BinaryData.deserialize(result.b);
                                 break;
                             case "lancopy/files":
-//                            data = FilesData.deserialize(result.b, filename -> {
-//                                File f = new File(filename);
-//                                fileSaveChooser.setSelectedFile(f);
-//                                if (fileSaveChooser.showSaveDialog(null) == JFileChooser.APPROVE_OPTION) {
-//                                    return fileSaveChooser.getSelectedFile();
-//                                } else {
-//                                    return null;
-//                                }
-//                            });
-//                            break;
-                                throw new RuntimeException("not yet implemented");
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                                    data = ContentData.deserialize(result.b, getContext(), filename -> {
+                                        return getSaveUri(filename);
+                                    });
+                                } else {
+                                    data = FilesData.deserialize(result.b, filename -> {
+                                        String savePath = getSavePath(filename);
+                                        if (savePath == null) {
+                                            return null;
+                                        }
+                                        return new File(filename);
+                                    });
+                                }
+                                break;
                             case "lancopy/nodata":
                                 data = NoData.deserialize(result.b);
                                 break;
@@ -176,19 +202,26 @@ public class NodeListFragment extends LCFragment {
                         ClipData clip = ClipData.newPlainText("pulled ErrorData", ((ErrorData) data).text);
                         clipboard.setPrimaryClip(clip);
                     } else if (data instanceof BinaryData) {
-//                    if (fileOpenChooser.showSaveDialog(null) == JFileChooser.APPROVE_OPTION) {
-//                        File f = fileOpenChooser.getSelectedFile();
-//                        FileUtils.copyInputStreamToFile(((BinaryData) data).stream, f);
-//                        taLoadedData.setText(((BinaryData) data).toString());
-//                        try {
-//                            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(f.getParentFile().getAbsolutePath()), null);
-//                        } catch (Throwable t) {
-//                            // Nevermind
-//                        }
-//                    } else {
-//                        throw new RuntimeException("File save canceled");
-//                    }
-                        throw new IOException();
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                            Uri saveUri = getSaveUri(System.currentTimeMillis()+".dat");
+                            if (saveUri == null) {
+                                throw new RuntimeException("File save canceled");
+                            }
+                            OutputStream output = getContext().getContentResolver().openOutputStream(saveUri);
+                            MeUtils.pipeInputStreamToOutputStream(((BinaryData) data).stream, output);
+                            output.flush();
+                            output.close();
+                        } else {
+                            String savePath = getSavePath(System.currentTimeMillis()+".dat");
+                            if (savePath == null) {
+                                throw new RuntimeException("File save canceled");
+                            }
+                            File f = new File(savePath);
+                            FileUtils.copyInputStreamToFile(((BinaryData) data).stream, f);
+                            lcs.loadedText.set(((BinaryData) data).toString());
+                            ClipData clip = ClipData.newPlainText("pulled BinaryData", f.getParentFile().getAbsolutePath());
+                            clipboard.setPrimaryClip(clip);
+                        }
                     } else if (data instanceof FilesData) {
                         FilesData fd = ((FilesData) data);
                         lcs.loadedText.set(fd.toLongString());
@@ -198,7 +231,15 @@ public class NodeListFragment extends LCFragment {
                         } catch (Throwable t) {
                             // Nevermind
                         }
-                        //System.err.println("//TODO Save files");
+                    } else if (data instanceof ContentData) {
+                        ContentData cd = ((ContentData) data);
+                        lcs.loadedText.set(cd.toLongString());
+                        try {
+                            ClipData clip = ClipData.newPlainText("pulled ContentData", cd.uris[0]+"");
+                            clipboard.setPrimaryClip(clip);
+                        } catch (Throwable t) {
+                            // Nevermind
+                        }
                     } else if (data instanceof NoData) {
                         lcs.loadedText.set(((NoData) data).toString());
                         ClipData clip = ClipData.newPlainText("pulled NoData", ((NoData) data).toString());
@@ -206,7 +247,13 @@ public class NodeListFragment extends LCFragment {
                     } else {
                         throw new RuntimeException("Unhandled data type");
                     }
-                } catch (IOException ex) {
+                    String outcome = "";
+                    try {
+                        outcome = " - " + clipboard.getPrimaryClip().getItemAt(0).getText();
+                    } catch (Throwable t) {
+                    }
+                    toast("Data pulled" + outcome);
+                } catch (Throwable ex) {
                     Log.e(TAG, "Error deserializing pulled data", ex);
                     lcs.loadedText.set("ERROR: " + ex.getMessage());
                 } finally {
@@ -214,6 +261,44 @@ public class NodeListFragment extends LCFragment {
                 }
             }).start();
             /**/
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.KITKAT)
+    private Uri getSaveUri(String filename) {
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_TITLE, filename);
+        intent.putExtra("action", ACTION_SAVE_FILE);
+
+        Any2OneChannel<Uri> resultChannel = Channel.<Uri> any2one();
+        startActivityForResult(intent, ACTION_SAVE_FILE+lcs.fileSaveResults.takeTicket(JcspUtils.logDeadlock(resultChannel.out())));
+        return resultChannel.in().read();
+    }
+
+    private String getSavePath(String filename) {
+        File f = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        Any2OneChannel<String> resultChannel = Channel.<String> any2one();
+        MyApplication.inputDialog(getActivity(), "Save file path", f.getAbsolutePath() + "/" + filename, path -> {
+            JcspUtils.logDeadlock(resultChannel.out()).write(path);
+        }, () -> {});
+        return resultChannel.in().read();
+    }
+
+    private static final int ACTION_SAVE_FILE = 10000;
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, @Nullable @org.jetbrains.annotations.Nullable Intent data) {
+        //super.onActivityResult(requestCode, resultCode, data);
+        Log.d(TAG,"onActivityResult " + requestCode + " " + resultCode + " " + data);
+        if (data != null && requestCode >= ACTION_SAVE_FILE && resultCode == Activity.RESULT_OK) {
+            Uri uri = data.getData();
+            ChannelOutput<Uri> co = lcs.fileSaveResults.remove(requestCode-ACTION_SAVE_FILE);
+            if (co != null) {
+                co.write(uri);
+            } else {
+                Log.e(TAG, "No return channel found");
+            }
         }
     }
 }

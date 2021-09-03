@@ -128,31 +128,9 @@ public class PostingFragment extends LCFragment {
             }
         });
         view.findViewById(R.id.btnPostFiles).setOnLongClickListener(v -> {
-            // https://stackoverflow.com/a/10904665/513038
-            AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
-            builder.setTitle("Title");
-
-            final EditText input = new EditText(getActivity());
-            input.setText(orNull(MyApplication::getApkName));
-            input.setInputType(InputType.TYPE_CLASS_TEXT);
-            builder.setView(input);
-
-            builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
-                @Override
-                public void onClick(DialogInterface dialog, int which) {
-                    String path = input.getText().toString();
-                    setData(new FilesData(new File[]{new File(path)}));
-                }
-            });
-            builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-                @Override
-                public void onClick(DialogInterface dialog, int which) {
-                    dialog.cancel();
-                }
-            });
-
-            builder.show();
-
+            MyApplication.inputDialog(getActivity(), "File path", orNull(MyApplication::getApkName), path -> {
+                setData(new FilesData(new File[]{new File(path)}));
+            }, () -> {});
             return true;
         });
         view.findViewById(R.id.btnPostFiles).setOnClickListener(v -> {
