@@ -7,3 +7,5 @@ Request permissions
 Fragment setRetained?
 Stop/restart service
 Color-code nodes
+Check options file
+Allow edit options

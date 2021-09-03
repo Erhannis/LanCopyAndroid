@@ -1,6 +1,10 @@
 package com.erhannis.lancopy.ui.main;
 
+import android.app.ProgressDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ComponentName;
+import android.content.Context;
 import android.os.Bundle;
 
 import androidx.databinding.DataBindingUtil;
@@ -15,9 +19,19 @@ import android.widget.ListView;
 
 import com.erhannis.lancopy.MyApplication;
 import com.erhannis.lancopy.R;
+import com.erhannis.lancopy.data.BinaryData;
+import com.erhannis.lancopy.data.Data;
+import com.erhannis.lancopy.data.ErrorData;
+import com.erhannis.lancopy.data.FilesData;
+import com.erhannis.lancopy.data.NoData;
+import com.erhannis.lancopy.data.TextData;
 import com.erhannis.lancopy.databinding.FragmentNodeListBinding;
 import com.erhannis.lancopy.refactor.Summary;
+import com.erhannis.mathnstuff.Pair;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -82,7 +96,9 @@ public class NodeListFragment extends LCFragment {
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         Log.d(TAG,"OnCreateView");
         FragmentNodeListBinding binding = DataBindingUtil.inflate(inflater, R.layout.fragment_node_list, container, false);
-        final NodeListAdapter adapter = new NodeListAdapter(new ArrayList<>());
+        final NodeListAdapter adapter = new NodeListAdapter(new ArrayList<>(), nodeLine -> {
+            pullFromNode(nodeLine);
+        });
         // This requires
         // - adding a layout element to activity_main.xml
         // - adding an id to the existing include element
@@ -100,5 +116,104 @@ public class NodeListFragment extends LCFragment {
                 this.nodeListAdapter.setList(new ArrayList<>(lcs.nodeLines));
             });
         });
+    }
+
+    private void pullFromNode(NodeLine nl) {
+        if (nl != null) {
+            ProgressDialog pd = new ProgressDialog(getActivity());
+            pd.setProgressStyle(ProgressDialog.STYLE_SPINNER);
+            pd.setTitle("Pulling data...");
+            pd.show();
+
+            new Thread(() -> { // Android didn't like me doing networking on main thread
+                try {
+                    //TODO This is not airtight; drag-n-drop still works, for instance
+                    Pair<String, InputStream> result = lcs.uii.dataCall.call(lcs.uii.adCall.call(nl.summary.id).comms);
+                    Data data;
+                    if (result == null) {
+                        data = new ErrorData("Node could not be reached");
+                    } else {
+                        switch (result.a) {
+                            case "text/plain":
+                                data = TextData.deserialize(result.b);
+                                break;
+                            case "application/octet-stream":
+                                data = BinaryData.deserialize(result.b);
+                                break;
+                            case "lancopy/files":
+//                            data = FilesData.deserialize(result.b, filename -> {
+//                                File f = new File(filename);
+//                                fileSaveChooser.setSelectedFile(f);
+//                                if (fileSaveChooser.showSaveDialog(null) == JFileChooser.APPROVE_OPTION) {
+//                                    return fileSaveChooser.getSelectedFile();
+//                                } else {
+//                                    return null;
+//                                }
+//                            });
+//                            break;
+                                throw new RuntimeException("not yet implemented");
+                            case "lancopy/nodata":
+                                data = NoData.deserialize(result.b);
+                                break;
+                            default:
+                                data = new ErrorData("Unhandled MIME: " + result.a);
+                                break;
+                        }
+                        try {
+                            result.b.close();
+                        } catch (Throwable t) {
+                            t.printStackTrace();
+                        }
+                    }
+                    //System.out.println("rx data: " + data);
+                    ClipboardManager clipboard = (ClipboardManager) getActivity().getSystemService(Context.CLIPBOARD_SERVICE);
+                    if (data instanceof TextData) {
+                        lcs.loadedText.set(((TextData) data).text);
+                        ClipData clip = ClipData.newPlainText("pulled TextData", ((TextData) data).text);
+                        clipboard.setPrimaryClip(clip);
+                    } else if (data instanceof ErrorData) {
+                        lcs.loadedText.set(((ErrorData) data).text);
+                        ClipData clip = ClipData.newPlainText("pulled ErrorData", ((ErrorData) data).text);
+                        clipboard.setPrimaryClip(clip);
+                    } else if (data instanceof BinaryData) {
+//                    if (fileOpenChooser.showSaveDialog(null) == JFileChooser.APPROVE_OPTION) {
+//                        File f = fileOpenChooser.getSelectedFile();
+//                        FileUtils.copyInputStreamToFile(((BinaryData) data).stream, f);
+//                        taLoadedData.setText(((BinaryData) data).toString());
+//                        try {
+//                            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(f.getParentFile().getAbsolutePath()), null);
+//                        } catch (Throwable t) {
+//                            // Nevermind
+//                        }
+//                    } else {
+//                        throw new RuntimeException("File save canceled");
+//                    }
+                        throw new IOException();
+                    } else if (data instanceof FilesData) {
+                        FilesData fd = ((FilesData) data);
+                        lcs.loadedText.set(fd.toLongString());
+                        try {
+                            ClipData clip = ClipData.newPlainText("pulled FilesData", fd.files[0].getParentFile().getAbsolutePath());
+                            clipboard.setPrimaryClip(clip);
+                        } catch (Throwable t) {
+                            // Nevermind
+                        }
+                        //System.err.println("//TODO Save files");
+                    } else if (data instanceof NoData) {
+                        lcs.loadedText.set(((NoData) data).toString());
+                        ClipData clip = ClipData.newPlainText("pulled NoData", ((NoData) data).toString());
+                        clipboard.setPrimaryClip(clip);
+                    } else {
+                        throw new RuntimeException("Unhandled data type");
+                    }
+                } catch (IOException ex) {
+                    Log.e(TAG, "Error deserializing pulled data", ex);
+                    lcs.loadedText.set("ERROR: " + ex.getMessage());
+                } finally {
+                    pd.dismiss();
+                }
+            }).start();
+            /**/
+        }
     }
 }

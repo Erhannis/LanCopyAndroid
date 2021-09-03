@@ -54,6 +54,7 @@ public class LanCopyService extends Service {
         public final CopyOnWriteArrayList<NodeLine> nodeLines = new CopyOnWriteArrayList<>();
         //TODO Make better
         public final Observable<Object> nodeLinesChanged = new Observable<Object>(true);
+        public final Observable<String> loadedText = new Observable<String>(false); //TODO Use
 
         public LocalBinder(LanCopyNet.UiInterface uii) {
             this.uii = uii;

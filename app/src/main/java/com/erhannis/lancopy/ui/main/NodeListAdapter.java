@@ -10,14 +10,17 @@ import android.widget.Toast;
 import com.erhannis.lancopy.databinding.NodeListItemBinding;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 // https://dbremes.wordpress.com/2017/11/12/data-binding-android-listviews/
 public class NodeListAdapter extends BaseAdapter {
     private List<NodeLine> mNodeLines;
     private LayoutInflater mLayoutInflater;
+    private Consumer<NodeLine> onClickHandler;
 
-    public NodeListAdapter(List<NodeLine> nodeLines) {
+    public NodeListAdapter(List<NodeLine> nodeLines, Consumer<NodeLine> onClickHandler) {
         mNodeLines = nodeLines;
+        this.onClickHandler = onClickHandler;
     }
 
     public void setList(List<NodeLine> nodeLines) {
@@ -55,12 +58,9 @@ public class NodeListAdapter extends BaseAdapter {
         else {
             binding = (NodeListItemBinding) result.getTag();
         }
-        result.setOnClickListener(v -> {
-            Context context = viewGroup.getContext();
-            Toast toast = Toast.makeText(context,
-                    "Position=" + i + ": " + ((NodeLine)getItem(i)).toString(),
-                    Toast.LENGTH_SHORT);
-            toast.show();
+        result.setOnLongClickListener(v -> {
+            onClickHandler.accept(((NodeLine)getItem(i)));
+            return true;
         });
         binding.setNodeLine(mNodeLines.get(i));
         return result;
