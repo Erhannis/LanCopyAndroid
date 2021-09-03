@@ -119,6 +119,11 @@ public class NodeListFragment extends LCFragment {
         Log.d(TAG,"OnCreateView");
         FragmentNodeListBinding binding = DataBindingUtil.inflate(inflater, R.layout.fragment_node_list, container, false);
         final NodeListAdapter adapter = new NodeListAdapter(new ArrayList<>(), nodeLine -> {
+            new Thread(() -> {
+                toast(lcs.uii.adCall.call(nodeLine.summary.id)+"");
+            }).start();
+        },
+        nodeLine -> {
             pullFromNode(nodeLine);
         });
         // This requires

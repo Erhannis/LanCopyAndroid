@@ -17,10 +17,12 @@ public class NodeListAdapter extends BaseAdapter {
     private List<NodeLine> mNodeLines;
     private LayoutInflater mLayoutInflater;
     private Consumer<NodeLine> onClickHandler;
+    private Consumer<NodeLine> onLongClickHandler;
 
-    public NodeListAdapter(List<NodeLine> nodeLines, Consumer<NodeLine> onClickHandler) {
+    public NodeListAdapter(List<NodeLine> nodeLines, Consumer<NodeLine> onClickHandler, Consumer<NodeLine> onLongClickHandler) {
         mNodeLines = nodeLines;
         this.onClickHandler = onClickHandler;
+        this.onLongClickHandler = onLongClickHandler;
     }
 
     public void setList(List<NodeLine> nodeLines) {
@@ -58,8 +60,11 @@ public class NodeListAdapter extends BaseAdapter {
         else {
             binding = (NodeListItemBinding) result.getTag();
         }
-        result.setOnLongClickListener(v -> {
+        result.setOnClickListener(v -> {
             onClickHandler.accept(((NodeLine)getItem(i)));
+        });
+        result.setOnLongClickListener(v -> {
+            onLongClickHandler.accept(((NodeLine)getItem(i)));
             return true;
         });
         binding.setNodeLine(mNodeLines.get(i));
