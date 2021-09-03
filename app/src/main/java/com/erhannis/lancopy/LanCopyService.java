@@ -1,13 +1,16 @@
 package com.erhannis.lancopy;
 
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Color;
 import android.os.Binder;
 import android.os.Build;
@@ -19,6 +22,7 @@ import android.widget.Toast;
 
 import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.erhannis.lancopy.refactor.Advertisement;
 import com.erhannis.lancopy.refactor.Comm;
@@ -55,6 +59,9 @@ public class LanCopyService extends Service {
             this.uii = uii;
         }
     }
+
+    private static final String ACTION_DESTROY = "com.erhannis.lancopy.LanCopyService.DESTROY";
+    private static final String ACTION_RESTART = "com.erhannis.lancopy.LanCopyService.RESTART";
 
     private NotificationManager mNM;
     private final LocalBinder mBinder;
@@ -191,6 +198,21 @@ public class LanCopyService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.i(TAG, "Received start id " + startId + ": " + intent);
+        if (intent != null && intent.getAction() != null) {
+            switch (intent.getAction()) {
+                case ACTION_DESTROY:
+                    die();
+                    break;
+                case ACTION_RESTART:
+                    // https://stackoverflow.com/a/38750878/513038
+                    AlarmManager am = (AlarmManager)getSystemService(Context.ALARM_SERVICE);
+                    Intent serviceIntent = new Intent(this, MainActivity.class);
+                    PendingIntent pi = PendingIntent.getActivity(this, 7, serviceIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+                    am.set(AlarmManager.RTC_WAKEUP, System.currentTimeMillis()+1000, pi);
+                    die();
+                    break;
+            }
+        }
         return START_STICKY;
     }
 
@@ -207,10 +229,10 @@ public class LanCopyService extends Service {
     public void onDestroy() {
         // Cancel the persistent notification.
         mNM.cancel(R.string.local_service_started);
-
-        // Tell the user we stopped.
+       // Tell the user we stopped.
         Toast.makeText(this, "LanCopy destroyed", Toast.LENGTH_SHORT).show();
         //TODO Close more cleanly than this
+        Log.d(TAG, "System.exit(0)");
         System.exit(0);
     }
 
@@ -238,6 +260,26 @@ public class LanCopyService extends Service {
 
         mBinder.uii.dataOwner.errOnce("//TODO Set swipe-down action on notification");
 
+        Intent destroyIntent = new Intent(this, LanCopyService.class);
+        destroyIntent.setAction(ACTION_DESTROY);
+        //destroyIntent.putExtra(EXTRA_NOTIFICATION_ID, 0);
+        PendingIntent destroyPendingIntent;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            destroyPendingIntent = PendingIntent.getForegroundService(this, 0, destroyIntent, 0);
+        } else {
+            destroyPendingIntent = PendingIntent.getService(this, 0, destroyIntent, 0);
+        }
+
+        Intent restartIntent = new Intent(this, LanCopyService.class);
+        restartIntent.setAction(ACTION_RESTART);
+        //restartIntent.putExtra(EXTRA_NOTIFICATION_ID, 0);
+        PendingIntent restartPendingIntent;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            restartPendingIntent = PendingIntent.getForegroundService(this, 0, restartIntent, 0);
+        } else {
+            restartPendingIntent = PendingIntent.getService(this, 0, restartIntent, 0);
+        }
+
         // Set the info for the views that show in the notification panel.
         Notification notification = new NotificationCompat.Builder(this, channelId)
                 .setOngoing(true)
@@ -248,6 +290,8 @@ public class LanCopyService extends Service {
                 .setContentText(text)  // the contents of the entry
                 .setContentIntent(contentIntent)  // The intent to send when the entry is clicked
                 .setCategory(Notification.CATEGORY_SERVICE)
+                .addAction(android.R.drawable.ic_delete, "Exit", destroyPendingIntent)
+                .addAction(android.R.drawable.ic_menu_rotate, "Restart", restartPendingIntent)
                 .build();
 
         // Send the notification.
@@ -262,5 +306,16 @@ public class LanCopyService extends Service {
         NotificationManager service = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         service.createNotificationChannel(chan);
         return channelId;
+    }
+
+    private void die() {
+        mNM.cancel(R.string.local_service_started);
+        stopForeground(true);
+        stopSelf();
+        // Tell the user we stopped.
+        Toast.makeText(this, "LanCopy destroyed", Toast.LENGTH_SHORT).show();
+        //TODO Close more cleanly than this
+        Log.d(TAG, "LanCopyService terminating");
+        android.os.Process.killProcess(android.os.Process.myPid());
     }
 }
