@@ -10,3 +10,4 @@ Color-code nodes
 Check options file
 Allow edit options
 Add help
+Limit to summary limit

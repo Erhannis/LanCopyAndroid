@@ -296,8 +296,11 @@ public class NodeListFragment extends LCFragment {
     public void onActivityResult(int requestCode, int resultCode, @Nullable @org.jetbrains.annotations.Nullable Intent data) {
         //super.onActivityResult(requestCode, resultCode, data);
         Log.d(TAG,"onActivityResult " + requestCode + " " + resultCode + " " + data);
-        if (data != null && requestCode >= ACTION_SAVE_FILE && resultCode == Activity.RESULT_OK) {
-            Uri uri = data.getData();
+        if (requestCode >= ACTION_SAVE_FILE) {
+            Uri uri = null;
+            if (data != null && resultCode == Activity.RESULT_OK) {
+                uri = data.getData();
+            }
             ChannelOutput<Uri> co = lcs.fileSaveResults.remove(requestCode-ACTION_SAVE_FILE);
             if (co != null) {
                 co.write(uri);
