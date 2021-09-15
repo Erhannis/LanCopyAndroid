@@ -17,7 +17,7 @@ public class MainActivity extends AppCompatActivity {
         public void onServiceConnected(ComponentName className, IBinder service) {
             lcs = (LanCopyService.LocalBinder)service;
             //toast("Connected to LanCopy service");
-            MainActivity.this.setTitle(lcs.uii.dataOwner.ID);
+            MainActivity.this.setTitle(lcs.uii.dataOwner.ID+"");
         }
 
         public void onServiceDisconnected(ComponentName className) {
