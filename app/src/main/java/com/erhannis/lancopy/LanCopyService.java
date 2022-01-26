@@ -1,6 +1,7 @@
 package com.erhannis.lancopy;
 
 import android.app.AlarmManager;
+import android.app.AlertDialog;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -34,7 +35,19 @@ import com.erhannis.mathnstuff.MeUtils;
 import com.erhannis.mathnstuff.Pair;
 import com.erhannis.mathnstuff.utils.NumberedConcurrentHashMap;
 import com.erhannis.mathnstuff.utils.Observable;
+import com.erhannis.mathnstuff.utils.Options;
 
+import org.apache.commons.codec.digest.DigestUtils;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStreamReader;
+import java.io.StringReader;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -44,11 +57,18 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 
+import jcsp.helpers.JcspUtils;
 import jcsp.lang.Alternative;
+import jcsp.lang.AltingChannelInputInt;
+import jcsp.lang.Any2OneChannelInt;
+import jcsp.lang.Channel;
 import jcsp.lang.ChannelOutput;
+import jcsp.lang.ChannelOutputInt;
 import jcsp.lang.Guard;
 import jcsp.lang.ProcessManager;
+import jcsp.util.ints.OverWriteOldestBufferInt;
 
 public class LanCopyService extends Service {
     private static final String TAG = "LanCopyService";
@@ -77,7 +97,48 @@ public class LanCopyService extends Service {
         LocalBinder binder0 = null;
         try {
             System.out.println("lancopy init");
-            LanCopyNet.UiInterface uii = LanCopyNet.startNet();
+            LanCopyNet.UiInterface[] uii0 = new LanCopyNet.UiInterface[1];
+            Any2OneChannelInt showLocalFingerprintChannel = Channel.any2oneInt(new OverWriteOldestBufferInt(1));
+            AltingChannelInputInt showLocalFingerprintIn = showLocalFingerprintChannel.in();
+
+            ChannelOutputInt showLocalFingerprintOut = JcspUtils.logDeadlock(showLocalFingerprintChannel.out());
+            File filesDir = MyApplication.getContext().getFilesDir();
+            Options options = Options.demandOptions(new File(filesDir, "options.dat").getAbsolutePath());
+            options.getOrDefault("Security.PROTOCOL", "TLSv1.2");
+            options.getOrDefault("Security.KEYSTORE_PATH", new File(filesDir, "lancopy.ks").getAbsolutePath());
+            options.getOrDefault("Security.TRUSTSTORE_PATH", new File(filesDir, "lancopy.ts").getAbsolutePath());
+            DataOwner dataOwner = new DataOwner(options, showLocalFingerprintOut, (msg) -> {
+                String localFingerprint = "UNKNOWN";
+                LanCopyNet.UiInterface luii = uii0[0];
+                if (luii != null) {
+                    localFingerprint = luii.dataOwner.tlsContext.sha256Fingerprint;
+                }
+                msg = msg + "\n\n" + "Local fingerprint is\n" + localFingerprint;
+                // Sorta hacky, sorry
+                boolean[] result = new boolean[1];
+                CountDownLatch cdl = new CountDownLatch(1);
+                new AlertDialog.Builder(LanCopyService.this)
+                        .setMessage(msg)
+                        .setTitle("Security error")
+                        .setCancelable(false)
+                        .setNegativeButton("No", (dialog, which) -> {
+                            result[0] = false;
+                            cdl.countDown();
+                        })
+                        .setPositiveButton("Yes", (dialog, which) -> {
+                            result[0] = true;
+                            cdl.countDown();
+                        })
+                        .create();
+                try {
+                    cdl.await();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                return result[0];
+            });
+            LanCopyNet.UiInterface uii = LanCopyNet.startNet(dataOwner, showLocalFingerprintOut);
+            uii0[0] = uii;
             binder0 = new LocalBinder(uii);
             /*
             this.cbLoopClipboard.setSelected((Boolean) dataOwner.options.getOrDefault("LOOP_CLIPBOARD", false));

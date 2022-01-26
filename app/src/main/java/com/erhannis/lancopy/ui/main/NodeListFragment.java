@@ -156,7 +156,7 @@ public class NodeListFragment extends LCFragment {
 
             new Thread(() -> { // Android didn't like me doing networking on main thread
                 try {
-                    Pair<String, InputStream> result = lcs.uii.dataCall.call(lcs.uii.adCall.call(nl.summary.id).comms);
+                    Pair<String, InputStream> result = lcs.uii.dataCall.call(nl.summary.id);
                     Data data;
                     if (result == null) {
                         data = new ErrorData("Node could not be reached");
