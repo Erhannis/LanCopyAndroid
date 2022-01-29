@@ -185,6 +185,11 @@ public class LanCopyService extends Service {
             options.getOrDefault("Security.PROTOCOL", "TLSv1.2");
             options.getOrDefault("Security.KEYSTORE_PATH", new File(filesDir, "lancopy.ks").getAbsolutePath());
             options.getOrDefault("Security.TRUSTSTORE_PATH", new File(filesDir, "lancopy.ts").getAbsolutePath());
+            options.getOrDefault("Comms.tcp.unauth_http.enabled", true);
+            options.getOrDefault("Comms.tcp.unauth_http.show_confirmation", true);
+
+            //DO Tell user be patient while generate keys
+
             DataOwner dataOwner = new DataOwner(options, showLocalFingerprintOut, (msg) -> {
                 String localFingerprint = "UNKNOWN";
                 LanCopyNet.UiInterface luii = uii0[0];
@@ -229,7 +234,7 @@ public class LanCopyService extends Service {
 
             LocalBinder binder00 = binder0;
             new ProcessManager(() -> {
-                Alternative alt = new Alternative(new Guard[]{uii.adIn, uii.commStatusIn, uii.summaryIn, showLocalFingerprintIn});
+                Alternative alt = new Alternative(new Guard[]{uii.adIn, uii.commStatusIn, uii.summaryIn, uii.confirmationServer, showLocalFingerprintIn});
                 HashMap<UUID, Summary> summarys = new HashMap<>();
                 List<Advertisement> roster = uii.rosterCall.call(null);
                 for (Advertisement ad : roster) {
@@ -283,7 +288,13 @@ public class LanCopyService extends Service {
                             summarys.put(summary.id, summary);
                             break;
                         }
-                        case 3: // showLocalFingerprintIn
+                        case 3: { // uii.confirmationServer
+                            String msg = uii.confirmationServer.startRead();
+                            boolean result = confirmDialog("Confirmation", msg);
+                            uii.confirmationServer.endRead(result);
+                            break;
+                        }
+                        case 4: // showLocalFingerprintIn
                         {
                             showLocalFingerprintIn.read();
                             boolean show = (boolean) uii.dataOwner.options.getOrDefault("TLS.SHOW_LOCAL_FINGERPRINT", true);
