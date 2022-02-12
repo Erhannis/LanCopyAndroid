@@ -34,6 +34,7 @@ import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
+import com.erhannis.android.ekandroid.ui.Dialogs;
 import com.erhannis.lancopy.refactor.Advertisement;
 import com.erhannis.lancopy.refactor.Comm;
 import com.erhannis.lancopy.refactor.LanCopyNet;
@@ -52,7 +53,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.io.StringReader;
+import java.lang.reflect.Method;
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -101,74 +104,6 @@ public class LanCopyService extends Service {
     private final LocalBinder mBinder;
     private ConcurrentHashMap<Comm, Boolean> commStatus = new ConcurrentHashMap<>();
 
-    private boolean confirmDialog(String title, String msg) {
-        boolean[] result = new boolean[1];
-        CountDownLatch cdl = new CountDownLatch(1);
-        String msg0 = msg;
-        new Handler(getMainLooper()).post(new Runnable() {
-            @Override
-            public void run() {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    checkDrawOverlayPermission();
-                }
-
-                System.err.println("//TODO Maybe a notification instead");
-                AlertDialog ad = new AlertDialog.Builder(LanCopyService.this)
-                        .setMessage(msg0)
-                        .setTitle(title)
-                        .setCancelable(false)
-                        .setNegativeButton("No", (dialog, which) -> {
-                            result[0] = false;
-                            cdl.countDown();
-                        })
-                        .setPositiveButton("Yes", (dialog, which) -> {
-                            result[0] = true;
-                            cdl.countDown();
-                        })
-                        .create();
-                ad.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
-                ad.show();
-            }
-        });
-        try {
-            cdl.await();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        return result[0];
-    }
-
-    private void notifyDialog(String title, String msg) {
-        //TODO This may not need to be blocking
-        CountDownLatch cdl = new CountDownLatch(1);
-        String msg0 = msg;
-        new Handler(getMainLooper()).post(new Runnable() {
-            @Override
-            public void run() {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    checkDrawOverlayPermission();
-                }
-
-                System.err.println("//TODO Maybe a notification instead");
-                AlertDialog ad = new AlertDialog.Builder(LanCopyService.this)
-                        .setMessage(msg0)
-                        .setTitle(title)
-                        .setCancelable(true)
-                        .setNeutralButton("OK", (dialog, which) -> {
-                            cdl.countDown();
-                        })
-                        .create();
-                ad.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
-                ad.show();
-            }
-        });
-        try {
-            cdl.await();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-    }
-
     public LanCopyService() {
         LocalBinder binder0 = null;
         try {
@@ -176,7 +111,6 @@ public class LanCopyService extends Service {
             LanCopyNet.UiInterface[] uii0 = new LanCopyNet.UiInterface[1];
             Any2OneChannelInt showLocalFingerprintChannel = Channel.any2oneInt(new OverWriteOldestBufferInt(1));
             AltingChannelInputInt showLocalFingerprintIn = showLocalFingerprintChannel.in();
-
 
             ChannelOutputInt showLocalFingerprintOut = JcspUtils.logDeadlock(showLocalFingerprintChannel.out());
             File filesDir = MyApplication.getContext().getFilesDir();
@@ -199,7 +133,7 @@ public class LanCopyService extends Service {
                 msg = msg + "\n\n" + "Local fingerprint is\n" + localFingerprint;
                 // Sorta hacky, sorry
 
-                return confirmDialog("Security error", msg);
+                return Dialogs.confirmDialog(this, "Security error", msg);
             });
             LanCopyNet.UiInterface uii = LanCopyNet.startNet(dataOwner, showLocalFingerprintOut);
             uii0[0] = uii;
@@ -290,7 +224,7 @@ public class LanCopyService extends Service {
                         }
                         case 3: { // uii.confirmationServer
                             String msg = uii.confirmationServer.startRead();
-                            boolean result = confirmDialog("Confirmation", msg);
+                            boolean result = Dialogs.confirmDialog(this, "Confirmation", msg);
                             uii.confirmationServer.endRead(result);
                             break;
                         }
@@ -299,7 +233,7 @@ public class LanCopyService extends Service {
                             showLocalFingerprintIn.read();
                             boolean show = (boolean) uii.dataOwner.options.getOrDefault("TLS.SHOW_LOCAL_FINGERPRINT", true);
                             if (show) {
-                                notifyDialog("Security: Local fingerprint", "An incoming connection has paused, presumably for fingerprint verification.\nThe local TLS fingerprint is:\n" + uii.dataOwner.tlsContext.sha256Fingerprint);
+                                Dialogs.notifyDialog(this, "Security: Local fingerprint", "An incoming connection has paused, presumably for fingerprint verification.\nThe local TLS fingerprint is:\n" + uii.dataOwner.tlsContext.sha256Fingerprint);
                             }
                             break;
                         }
@@ -452,19 +386,6 @@ public class LanCopyService extends Service {
         NotificationManager service = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         service.createNotificationChannel(chan);
         return channelId;
-    }
-
-    @RequiresApi(api = Build.VERSION_CODES.M)
-    public void checkDrawOverlayPermission() {
-        /** check if we already  have permission to draw over other apps */
-        if (!Settings.canDrawOverlays(this.getApplicationContext())) {
-            /** if not construct intent to request permission */
-            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
-            intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
-            /** request permission via start activity for result */
-            //startActivityForResult(intent, REQUEST_CODE);
-            this.getBaseContext().startActivity(intent);
-        }
     }
 
     private void die() {

@@ -12,6 +12,6 @@ public class NodeLine {
 
     @Override
     public String toString() {
-        return summary.timestamp + "|" + summary.id + " - " + summary.summary;
+        return summary.timestamp + " | " + summary.id + " - " + summary.summary;
     }
 }
