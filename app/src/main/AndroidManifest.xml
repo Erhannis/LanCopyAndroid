@@ -19,10 +19,23 @@
         android:theme="@style/Theme.LanCopy"
         android:usesCleartextTraffic="true"
         tools:replace="android:theme">
+
         <activity
-            android:name=".ui.main.OptionsActivity"
+            android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".ui.main.OptionsActivity"
+            android:exported="true"
+            android:label="LanCopy Options">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
@@ -36,15 +49,6 @@
             android:enabled="true"
             android:exported="true" />
 
-        <activity
-            android:name=".MainActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
         <activity
             android:name=".ui.main.DocumentsSampleActivity"
             android:exported="false">
