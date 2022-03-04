@@ -8,6 +8,7 @@ import android.os.Bundle;
 
 import com.erhannis.android.ekandroid.ui.ListFragment;
 import com.erhannis.android.ekandroid.ui.OptionsFragment;
+import com.erhannis.lancopy.MyApplication;
 import com.erhannis.lancopy.R;
 import com.erhannis.mathnstuff.utils.Options;
 
@@ -25,7 +26,7 @@ public class OptionsActivity extends AppCompatActivity {
         OptionsFragment f = (OptionsFragment) fm.findFragmentByTag(TAG_OPTIONS_FRAGMENT);
         if (f == null) {
             // (Optionally do some processing or w/e here)
-            f = new OptionsFragment(new Options());
+            f = new OptionsFragment(MyApplication.getOptions(), MyApplication.getOptionsFilename());
             fm.beginTransaction().add(f, TAG_OPTIONS_FRAGMENT).commit();
         }
         // (Optionally save a reference to the fragment here)

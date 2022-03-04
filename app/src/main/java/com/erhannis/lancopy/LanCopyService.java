@@ -113,9 +113,9 @@ public class LanCopyService extends Service {
             AltingChannelInputInt showLocalFingerprintIn = showLocalFingerprintChannel.in();
 
             ChannelOutputInt showLocalFingerprintOut = JcspUtils.logDeadlock(showLocalFingerprintChannel.out());
-            File filesDir = MyApplication.getContext().getFilesDir();
-            Options options = Options.demandOptions(new File(filesDir, "options.dat").getAbsolutePath());
+            Options options = MyApplication.getOptions();
 
+            File filesDir = MyApplication.getContext().getFilesDir();
             options.getOrDefault("Security.PROTOCOL", "TLSv1.2");
             options.getOrDefault("Security.KEYSTORE_PATH", new File(filesDir, "lancopy.ks").getAbsolutePath());
             options.getOrDefault("Security.TRUSTSTORE_PATH", new File(filesDir, "lancopy.ts").getAbsolutePath());

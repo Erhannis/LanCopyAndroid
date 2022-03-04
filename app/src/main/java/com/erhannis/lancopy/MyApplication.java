@@ -22,13 +22,31 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.multidex.MultiDexApplication;
 
 import com.erhannis.lancopy.data.FilesData;
+import com.erhannis.mathnstuff.utils.Options;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.function.Consumer;
 
 import static com.erhannis.mathnstuff.MeUtils.orNull;
 
 public class MyApplication extends MultiDexApplication {
+    private static Options options;
+
+    // Kinda weird
+    public static String getOptionsFilename() {
+        File filesDir = MyApplication.getContext().getFilesDir();
+        return new File(filesDir, "options.dat").getAbsolutePath();
+    }
+
+    public static synchronized Options getOptions() {
+        //TODO Think harder about whether there could be problems with this
+        if (options == null) {
+            options = Options.demandOptions(getOptionsFilename());
+        }
+        return options;
+    }
+
     private static Context CONTEXT = null;
 
     @Override
