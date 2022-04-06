@@ -1,14 +1,19 @@
 package com.erhannis.lancopy;
 
+import android.content.Intent;
+
 import com.erhannis.lancopy.refactor.Advertisement;
 import com.erhannis.lancopy.refactor.Comm;
 import com.erhannis.lancopy.refactor2.CommChannel;
+import com.erhannis.lancopy.ui.main.QRActivity;
 
 import java.util.Objects;
+import java.util.UUID;
 
 public class AndroidQRComm extends Comm {
     public static final String TYPE = "QR";
-    
+    public static final String TOKEN_KEY = "QR_COMM_TOKEN";
+
     public AndroidQRComm(Advertisement owner) {
         super(owner, TYPE, 7);
     }
@@ -41,8 +46,18 @@ public class AndroidQRComm extends Comm {
 
     @Override
     public CommChannel connect(DataOwner dataOwner) throws Exception {
-        SwingQRCommFrame sqcf = new SwingQRCommFrame(dataOwner, this);
-        sqcf.setVisible(true);
-        return sqcf.channel;
+        //QRActivity qra = new QRActivity(dataOwner, this);
+        //sqcf.setVisible(true);
+        //return sqcf.channel;
+        //DO //TODO Fix
+
+        String token = UUID.randomUUID().toString();
+        MyApplication.HORRIBLE_SINGLETON.put(token, (wait no) this); //TODO Clean up
+
+        Intent intent = new Intent(MyApplication.getContext(), QRActivity.class);
+        intent.putExtra(TOKEN_KEY, token);
+        MyApplication.getContext().startActivity(intent);
+
+        throw new RuntimeException("FIX");
     }
 }

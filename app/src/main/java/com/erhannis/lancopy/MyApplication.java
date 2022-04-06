@@ -26,11 +26,15 @@ import com.erhannis.mathnstuff.utils.Options;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 import static com.erhannis.mathnstuff.MeUtils.orNull;
 
 public class MyApplication extends MultiDexApplication {
+    // Activities are REALLY ANNOYING in their indirection
+    //TODO This will probably lead to problems, but I'm annoyed and impatient enough not to care atm
+    public static final ConcurrentHashMap<String, Object> HORRIBLE_SINGLETON = new ConcurrentHashMap<>();
     private static Options options;
 
     // Kinda weird

@@ -15,8 +15,10 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 
 import com.erhannis.android.ekandroid.Misc;
-import com.erhannis.android.ekandroid.R;
+import com.erhannis.lancopy.R;
 import com.erhannis.lancopy.refactor2.CommChannel;
+import com.erhannis.lancopy.refactor2.qr.QRCommChannel;
+import com.erhannis.lancopy.refactor2.qr.QRProcess;
 import com.erhannis.mathnstuff.FactoryHashMap;
 import com.erhannis.mathnstuff.Stringable;
 import com.erhannis.mathnstuff.utils.Factory;
@@ -31,9 +33,22 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Random;
 import java.util.StringJoiner;
 
-public class QrFragment extends Fragment {
+import jcsp.helpers.JcspUtils;
+import jcsp.helpers.NameParallel;
+import jcsp.lang.AltingChannelInput;
+import jcsp.lang.Any2OneChannel;
+import jcsp.lang.CSProcess;
+import jcsp.lang.CSTimer;
+import jcsp.lang.Channel;
+import jcsp.lang.ChannelOutput;
+import jcsp.lang.ProcessManager;
+import jcsp.util.InfiniteBuffer;
+import jcsp.util.OverWriteOldestBuffer;
+
+public class QRFragment extends Fragment {
     public final CommChannel channel;
 
     private final Handler handler = Misc.startHandlerThread();
@@ -42,15 +57,158 @@ public class QrFragment extends Fragment {
      * Mandatory empty constructor for the fragment manager to instantiate the
      * fragment (e.g. upon screen orientation changes).
      */
-    public QrFragment() {
+    public QRFragment() {
         this(null);
         //TODO Throw exception?
     }
 
-    public QrFragment(CommChannel channel) {
+    public QRFragment(CommChannel channel) {
         this.channel = channel;
         //reload(); // Can't reload until view created
         this.setRetainInstance(true);
+
+        Webcam webcam = Webcam.getDefault();
+        Dimension[] ds = webcam.getViewSizes();
+        webcam.setViewSize(ds[ds.length - 1]);
+        webcam.open();
+        jSplitPane1.setLeftComponent(new WebcamPanel(webcam));
+        jSplitPane1.setDividerLocation(100);
+
+
+        //DO Resize/scale
+        final ImagePanel qrImagePanel = new ImagePanel();
+        jSplitPane2.setRightComponent(qrImagePanel);
+        qrImagePanel.invalidate();
+
+
+        Any2OneChannel<byte[]> txBytesChannel = Channel.<byte[]>any2one(5);
+        AltingChannelInput<byte[]> txBytesIn = txBytesChannel.in();
+        ChannelOutput<byte[]> txBytesOut = JcspUtils.logDeadlock(txBytesChannel.out());
+
+        // The buffering is a little non-standard, but I think this is right
+
+        Any2OneChannel<byte[]> rxBytesChannel = Channel.<byte[]>any2one(new InfiniteBuffer<>(), 5);
+        AltingChannelInput<byte[]> rxBytesIn = rxBytesChannel.in();
+        ChannelOutput<byte[]> rxBytesOut = JcspUtils.logDeadlock(rxBytesChannel.out());
+
+        Any2OneChannel<byte[]> txQrChannel = Channel.<byte[]>any2one(new InfiniteBuffer<>(), 5);
+        AltingChannelInput<byte[]> txQrIn = txQrChannel.in();
+        ChannelOutput<byte[]> txQrOut = JcspUtils.logDeadlock(txQrChannel.out());
+
+        Any2OneChannel<byte[]> rxQrChannel = Channel.<byte[]>any2one(5);
+        AltingChannelInput<byte[]> rxQrIn = rxQrChannel.in();
+        ChannelOutput<byte[]> rxQrOut = JcspUtils.logDeadlock(rxQrChannel.out());
+
+        Any2OneChannel<String> statusChannel = Channel.<String> any2one(new OverWriteOldestBuffer<>(1), 5);
+        AltingChannelInput<String> statusIn = statusChannel.in();
+        ChannelOutput<String> statusOut = JcspUtils.logDeadlock(statusChannel.out());
+
+
+        String[] lastStatus = {"None"};
+
+        this.channel = new QRCommChannel(dataOwner, txBytesOut, rxBytesIn, comm);
+        new ProcessManager(new NameParallel(new CSProcess[]{
+                new QRProcess(txBytesIn, txQrOut, rxBytesOut, rxQrIn, statusOut),
+
+                () -> {
+                    Thread.currentThread().setName("QR Camera loop");
+                    CSTimer timer = new CSTimer();
+                    while (true) {
+                        if (!webcam.isOpen()) {
+                            timer.sleep(200);
+                            taStatus.setText(lastStatus[0] + "\n" + "camera not open");
+                            continue;
+                        }
+                        BufferedImage image = webcam.getImage();
+                        if (image == null) {
+                            taStatus.setText(lastStatus[0] + "\n" + "no image");
+                            continue;
+                        }
+
+                        Result result = null;
+                        try {
+                            result = new QRCodeReader().decode(new BinaryBitmap(new HybridBinarizer(new BufferedImageLuminanceSource(image))));
+                            taStatus.setText(lastStatus[0] + "\n" + "qr visible");
+                        } catch (NotFoundException e) {
+                            taStatus.setText(lastStatus[0] + "\n" + "qr not visible 1");
+                            continue;
+                        } catch (ChecksumException ex) {
+                            taStatus.setText(lastStatus[0] + "\n" + "qr not visible 2");
+                            continue;
+                        } catch (FormatException ex) {
+                            taStatus.setText(lastStatus[0] + "\n" + "qr not visible 3");
+                            continue;
+                        }
+
+                        if (result != null) {
+                            ArrayList<byte[]> segments = (ArrayList<byte[]>) result.getResultMetadata().get(ResultMetadataType.BYTE_SEGMENTS);
+                            if (segments.size() > 1) {
+                                System.err.println("Got more than one segment in a qr code!!! What does it mean?!?");
+                            }
+                            for (byte[] segment : segments) {
+                                System.out.println("QR <-RXb " + Arrays.toString(segment));
+                                System.out.println("QR <-RXc " + new String(segment, CHARSET));
+
+                                rxQrOut.write(segment);
+                            }
+                        }
+                    }
+                },
+
+                () -> {
+                    Thread.currentThread().setName("QR handler loop");
+                    Random r = new Random();
+                    CSTimer jitterTimer = new CSTimer();
+                    // The jitter is because sometimes the reader would get stuck, and slightly moving the image unsticks it
+                    jitterTimer.setAlarm(jitterTimer.read()+((Long) dataOwner.options.getOrDefault("Comms.qr.JITTER.INTERVAL",200L)));
+                    BufferedImage lastTxQr = null;
+
+                    Alternative alt = new Alternative(new Guard[]{txQrIn, statusIn, jitterTimer});
+                    while (true) {
+                        switch (alt.priSelect()) {
+                            case 0: { // txQrIn
+                                byte[] qr = txQrIn.read();
+                                System.out.println("QR TXb-> " + Arrays.toString(qr));
+                                System.out.println("QR TXc-> " + new String(qr, CHARSET));
+                                try {
+                                    BufferedImage bi = getQR(qr);
+                                    qrImagePanel.setImage(bi);
+                                    lastTxQr = bi;
+                                    long INTERVAL = (Long) dataOwner.options.getOrDefault("Comms.qr.JITTER.INTERVAL",200L);
+                                    jitterTimer.setAlarm(jitterTimer.read()+INTERVAL);
+                                } catch (WriterException ex) {
+                                    Logger.getLogger(SwingQRCommFrame.class.getName()).log(Level.SEVERE, null, ex);
+                                }
+                                break;
+                            }
+                            case 1: { // statusIn
+                                lastStatus[0] = statusIn.read();
+                                break;
+                            }
+                            case 2: { // jitterTimer
+                                if (lastTxQr != null) {
+                                    double X = (Double) dataOwner.options.getOrDefault("Comms.qr.JITTER.X",100.0);
+                                    double Y = (Double) dataOwner.options.getOrDefault("Comms.qr.JITTER.Y",100.0);
+                                    boolean ROTATE = (Boolean) dataOwner.options.getOrDefault("Comms.qr.JITTER.ROTATE",true);
+                                    BufferedImage jittered = transform(lastTxQr, ROTATE ? r.nextInt(4) * Math.PI / 2 : 0, (r.nextDouble()*X)-(X/2), (r.nextDouble()*Y)-(Y/2));
+                                    qrImagePanel.setImage(jittered);
+                                }
+                                long INTERVAL = (Long) dataOwner.options.getOrDefault("Comms.qr.JITTER.INTERVAL",200L);
+                                jitterTimer.setAlarm(jitterTimer.read()+INTERVAL);
+                                break;
+                            }
+                        }
+                    }
+                }
+        })).start();
+
+        this.addWindowListener(new WindowAdapter() {
+            public void windowClosing(WindowEvent e) {
+                webcam.close();
+                rxQrOut.poison(10);
+                txQrIn.poison(10);
+            }
+        });
     }
 
     @Override
@@ -61,160 +219,8 @@ public class QrFragment extends Fragment {
         ft.replace(R.id.fcvTop, listFragment);
         ft.commit();
 
-        this.tvMessage.setText(message);
-
-        this.btnReload.setOnClickListener(v -> {
-            reload();
-        });
-
-        Misc.runOnUiThread(() -> {
-            System.out.println("--> ocv.rui.reload");
-            reload();
-            System.out.println("<-- ocv.rui.reload");
-        });
+        //DO Set UI callbacks etc.
 
         return view;
-    }
-
-    /**
-     * Run on UI thread
-     */
-    public void reload() {
-        ArrayList<Stringable<Map.Entry<String, Object>>> items = new ArrayList<>();
-        FactoryHashMap<Object, HashSet<String>> reverse = new FactoryHashMap<>(new Factory<Object, HashSet<String>>() {
-            @Override
-            public HashSet<String> construct(Object input) {
-                return new HashSet<String>();
-            }
-        });
-        //Collections.sort
-        for (Entry<String, Object> e : options.getRecentEntries()) {
-            Stringable<Entry<String, Object>> s = new Stringable<Entry<String, Object>>(e, e.getKey() + " : " + e.getValue());
-            items.add(s);
-            reverse.get(s.val.getValue()).add(s.val.getKey());
-        }
-        for (Entry<Object, HashSet<String>> e : reverse.entrySet()) {
-            if (e.getValue().size() > 1) {
-                System.err.println("Conflict on " + e.getKey() + " with " + StringUtils.join(e.getValue()));
-            }
-        }
-        listFragment.setList(items);
-    }
-
-    private void select(Entry<String, Object> entry) {
-        Entry<String,Object> e = entry;
-        if (e.getValue() != null) {
-            if (e.getValue() instanceof Boolean) {
-                String newValue = Dialogs.stringInputDialog(this.getActivity(), e.getKey() + " (boolean)", ""+e.getValue());
-                if (newValue != null) {
-                    boolean v = false;
-                    if ("true".equals(newValue.toLowerCase())) {
-                        v = true;
-                    } else if ("false".equals(newValue.toLowerCase())) {
-                        v = false;
-                    } else {
-                        Misc.showToast(this.getActivity(), "Error, please enter true or false");
-                        return;
-                    }
-                    options.set(e.getKey(), v);
-                }
-            } else if (e.getValue() instanceof String) {
-                String newValue = Dialogs.stringInputDialog(this.getActivity(), e.getKey() + " (string)", ""+e.getValue());
-                if (newValue != null) {
-                    options.set(e.getKey(), newValue);
-                }
-            } else if (e.getValue() instanceof Character) {
-                String newValue = Dialogs.stringInputDialog(this.getActivity(), e.getKey() + " (character)", ""+e.getValue());
-                if (newValue != null) {
-                    if (newValue.length() != 1) {
-                        Misc.showToast(this.getActivity(), "Error, please enter a single character");
-                        return;
-                    }
-                    options.set(e.getKey(), newValue.charAt(0));
-                }
-            } else if (e.getValue() instanceof Integer) {
-                String newValue = Dialogs.stringInputDialog(this.getActivity(), e.getKey() + " (integer)", ""+e.getValue());
-                if (newValue != null) {
-                    int v = 0;
-                    try {
-                        v = Integer.parseInt(newValue);
-                    } catch (NumberFormatException ex) {
-                        Misc.showToast(this.getActivity(), "Error, please enter an integer (max 32 bit)");
-                        return;
-                    }
-                    options.set(e.getKey(), v);
-                }
-            } else if (e.getValue() instanceof Long) {
-                String newValue = Dialogs.stringInputDialog(this.getActivity(), e.getKey() + " (long integer)", ""+e.getValue());
-                if (newValue != null) {
-                    long v = 0;
-                    try {
-                        v = Long.parseLong(newValue);
-                    } catch (NumberFormatException ex) {
-                        Misc.showToast(this.getActivity(), "Error, please enter an integer (max 64 bit)");
-                        return;
-                    }
-                    options.set(e.getKey(), v);
-                }
-            } else if (e.getValue() instanceof Float) {
-                String newValue = Dialogs.stringInputDialog(this.getActivity(), e.getKey() + " (float)", ""+e.getValue());
-                if (newValue != null) {
-                    float v = 0;
-                    try {
-                        v = Float.parseFloat(newValue);
-                    } catch (NumberFormatException ex) {
-                        Misc.showToast(this.getActivity(), "Error, please enter a float");
-                        return;
-                    }
-                    options.set(e.getKey(), v);
-                }
-            } else if (e.getValue() instanceof Double) {
-                String newValue = Dialogs.stringInputDialog(this.getActivity(), e.getKey() + " (double)", ""+e.getValue());
-                if (newValue != null) {
-                    double v = 0;
-                    try {
-                        v = Double.parseDouble(newValue);
-                    } catch (NumberFormatException ex) {
-                        Misc.showToast(this.getActivity(), "Error, please enter a double (floating point number)");
-                        return;
-                    }
-                    options.set(e.getKey(), v);
-                }
-            } else {
-                Misc.showToast(this.getActivity(), "Sorry, unhandled datatype");
-                return;
-            }
-            if ((Boolean)options.getOrDefault("OptionsFrame.AUTOSAVE_OPTIONS", true)) {
-                try {
-                    Options.saveOptions(options, optionsFilename);
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                    Misc.showToast(this.getActivity(), "Failed to save options to disk.");
-                }
-            }
-            Misc.runOnUiThread(() -> {
-                reload();
-            });
-        } else {
-            Misc.showToast(this.getActivity(), "Sorry, null value; can't infer datatype");
-            return;
-        }
-    }
-
-    private void delete(Entry<String, Object> entry) {
-        if (Dialogs.confirmDialog(this.getContext(), "Delete option?", "Delete option, potentially resetting it back to default?")) {
-            options.remove(entry.getKey());
-            if ((Boolean)options.getOrDefault("OptionsFrame.AUTOSAVE_OPTIONS", true)) {
-                try {
-                    Options.saveOptions(options, optionsFilename);
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                    Misc.showToast(this.getActivity(), "Failed to save options to disk.");
-                }
-            }
-            Misc.runOnUiThread(() -> {
-                reload();
-            });
-        }
     }
 }

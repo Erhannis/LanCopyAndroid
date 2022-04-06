@@ -15,6 +15,8 @@ import com.erhannis.lancopy.ui.main.MainFragment;
 import com.erhannis.lancopy.ui.main.OptionsActivity;
 import com.erhannis.lancopy.ui.main.QRActivity;
 
+import java.util.Arrays;
+
 public class MainActivity extends AppCompatActivity {
     private ServiceConnection mConnection = new ServiceConnection() {
         public void onServiceConnected(ComponentName className, IBinder service) {
@@ -52,8 +54,8 @@ public class MainActivity extends AppCompatActivity {
             return true;
         });
         menu.add("QR...").setOnMenuItemClickListener(menuItem -> {
-            Intent intent = new Intent(this, QRActivity.class);
-            startActivity(intent);
+            AndroidQRComm qc = new AndroidQRComm(null);
+            lcs.uii.subscribeOut.write(Arrays.asList(qc));
             return true;
         });
         return super.onCreateOptionsMenu(menu);

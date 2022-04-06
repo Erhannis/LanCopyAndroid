@@ -7,8 +7,10 @@ import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 
 import com.erhannis.android.ekandroid.ui.OptionsFragment;
+import com.erhannis.lancopy.AndroidQRComm;
 import com.erhannis.lancopy.MyApplication;
 import com.erhannis.lancopy.R;
+import com.erhannis.lancopy.refactor2.CommChannel;
 
 public class QRActivity extends AppCompatActivity {
     private static final String TAG_QR_FRAGMENT = "qr_fragment";
@@ -19,10 +21,10 @@ public class QRActivity extends AppCompatActivity {
         setContentView(R.layout.activity_qr);
 
         FragmentManager fm = getSupportFragmentManager();
-        OptionsFragment f = (OptionsFragment) fm.findFragmentByTag(TAG_QR_FRAGMENT);
+        QRFragment f = (QRFragment) fm.findFragmentByTag(TAG_QR_FRAGMENT);
         if (f == null) {
             // (Optionally do some processing or w/e here)
-            f = new QrFragment(MyApplication.getOptions(), MyApplication.getOptionsFilename());
+            f = new QRFragment((CommChannel) MyApplication.HORRIBLE_SINGLETON.get(getIntent().getStringExtra(AndroidQRComm.TOKEN_KEY)));
             fm.beginTransaction().add(f, TAG_QR_FRAGMENT).commit();
         }
         // (Optionally save a reference to the fragment here)
